@@ -1,0 +1,20 @@
+[Unit]
+Description=RDK X5 WiFi Configuration AP Mode
+After=network.target NetworkManager.service
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/wifi-config/start_wifi_setup.sh
+ExecStop=/opt/wifi-config/stop_wifi_setup.sh
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitInterval=60
+StandardOutput=journal
+StandardError=journal
+User=root
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

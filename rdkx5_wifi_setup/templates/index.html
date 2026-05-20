@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>RDK X5 WiFi 配置</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 16px 20px;
+}
+@media (prefers-color-scheme: dark) {
+  body { background: #1c1c1e; color: #f5f5f7; }
+  .card { background: #2c2c2e; }
+  .network-item { background: #3a3a3c; border-color: #48484a; }
+  .network-item:hover { background: #48484a; }
+  .network-item.selected { background: #0a84ff; border-color: #0a84ff; }
+  input[type="password"], input[type="text"] { background: #3a3a3c; color: #f5f5f7; border-color: #48484a; }
+  .back-link { color: #0a84ff; }
+  .subtitle { color: #98989d; }
+}
+
+.container { width: 100%; max-width: 400px; }
+.header { text-align: center; margin-bottom: 24px; }
+.header .icon { font-size: 48px; margin-bottom: 8px; }
+.header h1 { font-size: 22px; font-weight: 600; }
+.header .subtitle { font-size: 13px; color: #86868b; margin-top: 4px; }
+
+.card { background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+
+/* Scanning */
+.scanning { text-align: center; padding: 32px 0; }
+.spinner {
+  width: 36px; height: 36px; border: 3px solid #e5e5ea;
+  border-top-color: #0a84ff; border-radius: 50%; animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.scanning p { font-size: 14px; color: #86868b; }
+
+/* Network List */
+.network-list { max-height: 320px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.network-item {
+  display: flex; align-items: center; padding: 14px 16px; margin-bottom: 8px;
+  background: #fff; border: 1px solid #d1d1d6; border-radius: 12px;
+  cursor: pointer; transition: all 0.15s; gap: 10px;
+}
+.network-item:active, .network-item:hover { background: #e8e8ed; }
+.network-item.selected { background: #007aff; border-color: #007aff; color: #fff; }
+.network-item.selected .signal-label { color: rgba(255,255,255,0.8); }
+.signal-bars { display: flex; align-items: flex-end; gap: 1.5px; height: 16px; flex-shrink: 0; }
+.signal-bars .bar {
+  width: 3px; border-radius: 1px; background: #d1d1d6; transition: background 0.2s;
+}
+.signal-bars .bar.active { background: #34c759; }
+.network-item.selected .signal-bars .bar.active { background: #fff; }
+.network-item.selected .signal-bars .bar { background: rgba(255,255,255,0.3); }
+.network-info { flex: 1; min-width: 0; }
+.network-ssid { font-size: 16px; font-weight: 600; color: #1d1d1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.signal-label { font-size: 11px; color: #86868b; }
+.lock-icon { font-size: 14px; flex-shrink: 0; opacity: 0.7; }
+
+.scan-again { display: block; width: 100%; margin-top: 12px; padding: 10px;
+  background: transparent; border: 1px solid #d1d1d6; border-radius: 10px;
+  font-size: 14px; color: #007aff; cursor: pointer; }
+.scan-again:active { background: #f0f0f5; }
+
+/* Password */
+.password-section { }
+.password-section .selected-label { font-size: 12px; color: #86868b; margin-bottom: 4px; }
+.password-section .selected-ssid { font-size: 17px; font-weight: 600; margin-bottom: 16px; word-break: break-all; }
+.input-group { position: relative; margin-bottom: 16px; }
+.input-group input {
+  width: 100%; padding: 12px 44px 12px 14px; font-size: 15px;
+  border: 1px solid #d1d1d6; border-radius: 10px; background: #fff;
+  outline: none; transition: border-color 0.15s;
+}
+.input-group input:focus { border-color: #007aff; }
+.toggle-pw {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; font-size: 18px; cursor: pointer; padding: 6px;
+  color: #86868b; line-height: 1;
+}
+.btn-row { display: flex; gap: 10px; }
+.btn {
+  flex: 1; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 500;
+  border: none; cursor: pointer; text-align: center; transition: opacity 0.15s;
+}
+.btn:active { opacity: 0.7; }
+.btn-primary { background: #007aff; color: #fff; }
+.btn-secondary { background: #f0f0f5; color: #1d1d1f; }
+
+/* Status */
+.status-section { text-align: center; padding: 24px 0; }
+.status-icon { font-size: 56px; margin-bottom: 12px; }
+.status-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.status-msg { font-size: 14px; color: #86868b; line-height: 1.5; }
+.status-msg .ip { font-family: "SF Mono", "Menlo", monospace; color: #007aff; font-weight: 500; }
+
+.hidden { display: none !important; }
+
+/* No networks */
+.empty-state { text-align: center; padding: 24px 0; }
+.empty-state .empty-icon { font-size: 40px; margin-bottom: 8px; }
+.empty-state p { font-size: 14px; color: #86868b; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="icon">🤖</div>
+    <h1>RDK X5 WiFi 配置</h1>
+    <p class="subtitle">连接热点以配置网络</p>
+  </div>
+
+  <div class="card">
+
+    <!-- Scanning -->
+    <div id="scanning" class="scanning">
+      <div class="spinner"></div>
+      <p>正在扫描 WiFi 网络...</p>
+    </div>
+
+    <!-- Network List -->
+    <div id="network-list" class="hidden">
+      <div class="network-list" id="networks"></div>
+      <button class="scan-again" onclick="scanNetworks()">重新扫描</button>
+    </div>
+
+    <!-- Password Input -->
+    <div id="password-section" class="password-section hidden">
+      <div class="selected-label">连接到</div>
+      <div class="selected-ssid" id="selected-ssid"></div>
+      <div class="input-group">
+        <input type="password" id="password-input" placeholder="WiFi 密码" autocomplete="off">
+        <button class="toggle-pw" id="toggle-pw" onclick="togglePassword()">👁</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="showList()">← 返回</button>
+        <button class="btn btn-primary" onclick="connect()">连接</button>
+      </div>
+    </div>
+
+    <!-- Connecting -->
+    <div id="connecting" class="scanning hidden">
+      <div class="spinner"></div>
+      <p>正在连接到 <span id="connecting-ssid"></span>...</p>
+    </div>
+
+    <!-- Success -->
+    <div id="success" class="status-section hidden">
+      <div class="status-icon">✅</div>
+      <div class="status-title">连接成功！</div>
+      <div class="status-msg">
+        设备 IP: <span class="ip" id="success-ip"></span><br>
+        您可以关闭此页面。
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="error" class="status-section hidden">
+      <div class="status-icon">❌</div>
+      <div class="status-title">连接失败</div>
+      <div class="status-msg" id="error-msg"></div>
+      <div class="btn-row" style="margin-top: 16px;">
+        <button class="btn btn-secondary" onclick="showList()">重新扫描</button>
+        <button class="btn btn-primary" onclick="retryConnect()">重试</button>
+      </div>
+    </div>
+
+    <!-- Empty -->
+    <div id="empty-state" class="empty-state hidden">
+      <div class="empty-icon">📡</div>
+      <p>未检测到 WiFi 网络</p>
+      <p style="font-size:12px;margin-top:4px;">请确保附近有路由器在运行</p>
+      <button class="scan-again" style="margin-top:16px" onclick="scanNetworks()">重新扫描</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let currentSSID = "";
+let currentPassword = "";
+let currentSecurity = "";
+
+function show(id) {
+  ["scanning","network-list","password-section","connecting","success","error","empty-state"].forEach(function(s) {
+    document.getElementById(s).classList.add("hidden");
+  });
+  document.getElementById(id).classList.remove("hidden");
+}
+
+async function scanNetworks() {
+  show("scanning");
+  try {
+    const res = await fetch("/api/scan");
+    const networks = await res.json();
+    renderList(networks);
+    // Auto-rescan every 15s if on list screen
+    clearTimeout(window._rescanTimer);
+    window._rescanTimer = setTimeout(scanNetworks, 15000);
+  } catch (e) {
+    show("empty-state");
+  }
+}
+
+function renderList(networks) {
+  const container = document.getElementById("networks");
+  if (!networks.length) {
+    show("empty-state");
+    return;
+  }
+  show("network-list");
+  container.innerHTML = networks.map(function(n, i) {
+    const locked = n.security && n.security !== "--" && n.security !== "";
+    const bars = signalBars(n.signal);
+    return '<div class="network-item" onclick="selectNetwork(\'' + escHtml(n.ssid) + '\', \'' + (locked ? "locked" : "") + '\')">' +
+      '<div class="signal-bars">' + bars + '</div>' +
+      '<div class="network-info"><div class="network-ssid">' + escHtml(n.ssid) + '</div></div>' +
+      (locked ? '<div class="lock-icon">🔒</div>' : '<div class="lock-icon" style="opacity:0.3">🔓</div>') +
+      '</div>';
+  }).join("");
+}
+
+function signalBars(signal) {
+  // signal: 0-100, map to 0-5 bars
+  var level = signal > 80 ? 5 : signal > 60 ? 4 : signal > 40 ? 3 : signal > 20 ? 2 : signal > 0 ? 1 : 0;
+  var html = "";
+  for (var i = 0; i < 5; i++) {
+    html += '<div class="bar' + (i < level ? ' active' : '') + '" style="height:' + (6 + i * 3) + 'px"></div>';
+  }
+  return html;
+}
+
+function selectNetwork(ssid, security) {
+  currentSSID = ssid;
+  currentSecurity = security;
+  currentPassword = "";
+  document.getElementById("selected-ssid").textContent = ssid;
+  document.getElementById("password-input").value = "";
+  document.getElementById("password-input").type = "password";
+  document.getElementById("toggle-pw").textContent = "👁";
+  show("password-section");
+  setTimeout(function() {
+    document.getElementById("password-input").focus();
+  }, 150);
+}
+
+function showList() {
+  clearTimeout(window._rescanTimer);
+  scanNetworks();
+}
+
+function togglePassword() {
+  var input = document.getElementById("password-input");
+  var btn = document.getElementById("toggle-pw");
+  if (input.type === "password") {
+    input.type = "text";
+    btn.textContent = "🙈";
+  } else {
+    input.type = "password";
+    btn.textContent = "👁";
+  }
+}
+
+async function connect() {
+  var password = document.getElementById("password-input").value.trim();
+  if (!currentSSID) return;
+  currentPassword = password;
+  document.getElementById("connecting-ssid").textContent = currentSSID;
+  show("connecting");
+  try {
+    var res = await fetch("/api/connect", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ssid: currentSSID, password: password})
+    });
+    var result = await res.json();
+    if (result.success) {
+      document.getElementById("success-ip").textContent = result.ip || "(获取中...)";
+      show("success");
+      // Poll for status until AP goes down
+      pollDisconnect();
+    } else {
+      document.getElementById("error-msg").textContent = result.message || "连接失败，请重试。";
+      show("error");
+    }
+  } catch (e) {
+    document.getElementById("error-msg").textContent = "请求失败，请检查连接后重试。";
+    show("error");
+  }
+}
+
+async function retryConnect() {
+  await connect();
+}
+
+async function pollDisconnect() {
+  try {
+    var res = await fetch("/api/status");
+    var data = await res.json();
+    if (data.connected && data.ip) {
+      document.getElementById("success-ip").textContent = data.ip;
+    }
+  } catch (e) {
+    // Server may have gone down (AP stopped), that's expected
+  }
+  // Keep polling every 2s for up to 30s
+  window._pollCount = (window._pollCount || 0) + 1;
+  if (window._pollCount < 15) {
+    setTimeout(pollDisconnect, 2000);
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+// Start scan on page load
+scanNetworks();
+</script>
+</body>
+</html>
