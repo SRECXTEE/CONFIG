@@ -7,6 +7,7 @@ import json
 import sys
 import re
 import time
+import threading
 from flask import Flask, render_template, request, jsonify, redirect
 
 app = Flask(__name__)
@@ -136,56 +137,39 @@ def api_connect():
     if not ssid:
         return jsonify({"success": False, "message": "SSID is required"}), 400
 
-    # Tear down AP mode first to free the interface
-    _run("python3", "/opt/wifi-config/ap_manager.py", "stop", "/opt/wifi-config")
-
-    # Wait for NetworkManager to take over
-    time.sleep(5)
-
-    # Remove old connection profile if exists
+    # Create connection profile while AP is still up (no interface needed)
     _run("nmcli", "connection", "delete", ssid)
-
-    # Create a new connection profile with SSID as the name
     if password:
-        _run("nmcli", "connection", "add", "type", "wifi", "con-name", ssid,
-             "ifname", "wlan0", "ssid", ssid,
-             "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", password,
-             "autoconnect", "yes")
+        result = _run("nmcli", "connection", "add", "type", "wifi", "con-name", ssid,
+                      "ifname", "wlan0", "ssid", ssid,
+                      "wifi-sec.key-mgmt", "wpa-psk", "wifi-sec.psk", password,
+                      "autoconnect", "yes")
     else:
-        _run("nmcli", "connection", "add", "type", "wifi", "con-name", ssid,
-             "ifname", "wlan0", "ssid", ssid,
-             "autoconnect", "yes")
+        result = _run("nmcli", "connection", "add", "type", "wifi", "con-name", ssid,
+                      "ifname", "wlan0", "ssid", ssid,
+                      "autoconnect", "yes")
 
-    # Activate the connection
-    result = _run("nmcli", "connection", "up", ssid, timeout=30)
+    if result.returncode != 0:
+        return jsonify({"success": False, "message": "Failed to create connection profile."}), 400
 
-    if result.returncode == 0:
-        FAILURE_COUNT.pop(ssid, None)
-        time.sleep(2)
-        connected, conn_ssid, ip = _get_current_connection()
-        return jsonify({
-            "success": True,
-            "message": "Connected successfully" if connected else "Activating...",
-            "ssid": conn_ssid,
-            "ip": ip,
-        })
-    else:
-        FAILURE_COUNT[ssid] = FAILURE_COUNT.get(ssid, 0) + 1
-        error = result.stderr.lower()
+    FAILURE_COUNT.pop(ssid, None)
 
-        if "secrets" in error or "password" in error or "auth" in error:
-            msg = "Incorrect password. Please try again."
-        elif "not found" in error or "no network" in error:
-            msg = "Network not found or out of range."
-        elif "timeout" in error:
-            msg = "Connection timed out. Please check the password and try again."
-        else:
-            msg = "Connection failed. Please try again."
+    # Return success first, then tear down AP and connect in background.
+    # This lets the phone see the success message before it loses the hotspot.
+    def _finish_connect():
+        time.sleep(3)  # give the response time to reach the phone
+        _run("python3", "/opt/wifi-config/ap_manager.py", "stop", "/opt/wifi-config")
+        time.sleep(5)
+        _run("nmcli", "connection", "up", ssid, timeout=30)
 
-        if FAILURE_COUNT.get(ssid, 0) >= MAX_FAILURES:
-            msg += " (Multiple failures. Consider checking your password or selecting a different network.)"
+    threading.Thread(target=_finish_connect, daemon=True).start()
 
-        return jsonify({"success": False, "message": msg}), 400
+    return jsonify({
+        "success": True,
+        "message": "Configuring...",
+        "ssid": ssid,
+        "ip": "",
+    })
 
 
 @app.route("/api/status")
