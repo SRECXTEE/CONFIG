@@ -1,0 +1,12 @@
+[Unit]
+Description=RDK X5 Audio Auto Configuration
+After=pulseaudio.service
+Wants=pulseaudio.service
+
+[Service]
+Type=oneshot
+ExecStart=@SCRIPT_DIR@/apply-audio-config.sh
+RemainAfterExit=no
+
+[Install]
+WantedBy=default.target
